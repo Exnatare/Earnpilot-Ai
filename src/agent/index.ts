@@ -2,14 +2,18 @@ import { config, validateConfig } from '../config/index.js';
 import { geminiService } from '../services/gemini.js';
 import { githubService } from '../services/github.js';
 import { superteamService } from '../services/superteam.js';
+import { codeBuilderService } from '../services/codeBuilder.js';
+import { buildManager } from '../services/buildManager.js';
 import { bountyFilter } from '../utils/bountyFilter.js';
 import { Bounty, BountyScore } from '../types/bounty.js';
+import { CodeGenerationRequest, GeneratedCode } from '../types/builder.js';
 
 class EarnPilotAgent {
   private name: string = 'EarnPilot AI';
   private status: string = 'initialized';
   private discoveredBounties: Bounty[] = [];
   private topBounties: BountyScore[] = [];
+  private currentProject: { name: string; directory: string } | null = null;
 
   async initialize(): Promise<void> {
     try {
@@ -63,11 +67,9 @@ class EarnPilotAgent {
     try {
       console.log(`[${this.name}] 🔍 Discovering bounties...`);
       
-      // Fetch all bounties
       const allBounties = await superteamService.fetchBounties();
       console.log(`[${this.name}] Found ${allBounties.length} total bounties`);
 
-      // Filter for agent-eligible bounties
       const agentEligible = allBounties.filter(b => superteamService.isAgentEligible(b));
       console.log(`[${this.name}] ✓ ${agentEligible.length} agent-eligible bounties`);
 
@@ -179,6 +181,100 @@ Provide:
     }
   }
 
+  /**
+   * Generate complete project code from bounty
+   */
+  async generateSolutionCode(bounty: Bounty, technology: string = 'typescript'): Promise<GeneratedCode> {
+    try {
+      console.log(`[${this.name}] 🏗️ Generating solution code for "${bounty.title}"...`);
+
+      const request: CodeGenerationRequest = {
+        title: bounty.title,
+        description: bounty.description,
+        requirements: bounty.requirements,
+        technology,
+        style: 'complete',
+      };
+
+      const generatedCode = await codeBuilderService.generateProject(request);
+      console.log(`[${this.name}] ✓ Generated ${generatedCode.files.length} files`);
+      return generatedCode;
+    } catch (error) {
+      throw new Error(`Solution code generation failed: ${error}`);
+    }
+  }
+
+  /**
+   * Create and build a solution project
+   */
+  async buildSolution(projectName: string, generatedCode: GeneratedCode): Promise<any> {
+    try {
+      console.log(`[${this.name}] 🛠️ Building solution: "${projectName}"...`);
+
+      // Initialize project directory
+      const projectDir = await buildManager.initializeProject(projectName);
+      this.currentProject = { name: projectName, directory: projectDir };
+
+      // Write generated files
+      const files = generatedCode.files.map(f => ({
+        path: f.path,
+        content: f.content,
+      }));
+      await buildManager.writeFiles(projectDir, files);
+
+      // Complete build pipeline
+      const buildResult = await buildManager.completeBuild(projectDir, {
+        install: true,
+        build: true,
+        test: true,
+        buildCmd: 'npm run build',
+        testCmd: 'npm test',
+      });
+
+      if (!buildResult.success) {
+        console.error(`[${this.name}] ✗ Build failed`);
+        throw new Error('Build pipeline failed');
+      }
+
+      console.log(`[${this.name}] ✓ Solution built successfully in ${buildResult.totalTime}ms`);
+      return buildResult;
+    } catch (error) {
+      throw new Error(`Solution building failed: ${error}`);
+    }
+  }
+
+  /**
+   * Generate documentation for solution
+   */
+  async generateDocumentation(projectName: string, description: string, features: string[], technology: string = 'typescript'): Promise<string> {
+    try {
+      console.log(`[${this.name}] 📝 Generating documentation...`);
+      const readme = await codeBuilderService.generateDocumentation(projectName, description, features, technology);
+      console.log(`[${this.name}] ✓ Documentation generated`);
+      return readme;
+    } catch (error) {
+      throw new Error(`Documentation generation failed: ${error}`);
+    }
+  }
+
+  /**
+   * Generate Dockerfile for solution
+   */
+  async generateDeploymentConfig(technology: string = 'typescript', port: number = 3000): Promise<{ dockerfile: string; dockerignore: string }> {
+    try {
+      console.log(`[${this.name}] 🐳 Generating Docker configuration...`);
+      const dockerConfig = await codeBuilderService.generateDockerfile(
+        this.currentProject?.name || 'solution',
+        technology,
+        port
+      );
+      console.log(`[${this.name}] ✓ Docker configuration generated`);
+      return dockerConfig;
+    } catch (error) {
+      throw new Error(`Docker configuration generation failed: ${error}`);
+    }
+  }
+
   getStatus(): string {
     return this.status;
   }
@@ -193,6 +289,10 @@ Provide:
 
   getTopBountiesCount(): number {
     return this.topBounties.length;
+  }
+
+  getCurrentProject(): { name: string; directory: string } | null {
+    return this.currentProject;
   }
 }
 
