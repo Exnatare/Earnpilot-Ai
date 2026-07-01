@@ -1,0 +1,22 @@
+# Gemini API Configuration
+GEMINI_API_KEY=AQ.Ab8RN6JTGzwyKaFapvbb7j52Q-Fm5J84-rUDF6n0rqcBfh_g4g
+
+# GitHub Configuration
+GITHUB_TOKEN=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
+GITHUB_USERNAME=your_github_username
+
+# Superteam Configuration
+SUPERTEAM_API_KEY=your_superteam_api_key_here
+SUPERTEAM_BASE_URL=https://api.superteam.fun
+
+# Solana Configuration (Devnet for testing)
+SOLANA_RPC_URL=https://api.devnet.solana.com
+SOLANA_WALLET_PRIVATE_KEY=your_wallet_private_key_here
+SOLANA_ESCROW_PROGRAM=your_escrow_program_address
+
+# Deployment Configuration
+DEPLOYMENT_PLATFORM=vercel
+VERCEL_TOKEN=your_vercel_token_here
+
+# Environment
+NODE_ENV=development
